@@ -86,7 +86,7 @@ export default function ProductsPage() {
       {err && <p className="text-red-600 text-sm">{err}</p>}
 
       <div className="overflow-x-auto">
-        <table className="min-w-[780px] w-full border">
+        <table className="min-w-[850px] w-full border">
           <thead className="bg-gray-50">
             <tr>
               <th className="text-left p-2 border">Prodotto</th>
@@ -115,6 +115,12 @@ export default function ProductsPage() {
                   <td className="p-2 border text-center">
                     <div className="flex items-center justify-center gap-3">
                       <a className="underline" href={`/movements/new?product=${r.id}`}>Movimento</a>
+                      {role === 'admin' && (
+                        <>
+                          <span className="text-gray-300">·</span>
+                          <a className="underline" href={`/products/${r.id}/edit`}>Modifica</a>
+                        </>
+                      )}
                       {role === 'admin' && (r.active ? (
                         <button
                           className="text-red-600 underline"
@@ -137,9 +143,11 @@ export default function ProductsPage() {
               );
             })}
             {visible.length === 0 && (
-              <tr><td className="p-3 text-center text-sm text-gray-600" colSpan={6}>
-                Nessun prodotto da mostrare.
-              </td></tr>
+              <tr>
+                <td className="p-3 text-center text-sm text-gray-600" colSpan={6}>
+                  Nessun prodotto da mostrare.
+                </td>
+              </tr>
             )}
           </tbody>
         </table>
