@@ -26,18 +26,40 @@ export default function ProductsPage() {
   const [loading, setLoading] = useState(true);
   const [showInactive, setShowInactive] = useState(false);
   const [err, setErr] = useState<string|null>(null);
+  const [lowCount, setLowCount] = useState(0);
 
   async function load() {
     setLoading(true); setErr(null);
+
+    // Auth
     const { data: au } = await supabase.auth.getUser();
     if (!au?.user) { router.replace('/login'); return; }
 
-    const { data: r } = await supabase.from('staff').select('role').eq('user_id', au.user.id).maybeSingle();
+    // Ruolo
+    const { data: r } = await supabase
+      .from('staff')
+      .select('role')
+      .eq('user_id', au.user.id)
+      .maybeSingle();
     if (r?.role === 'admin') setRole('admin');
 
-    const { data, error } = await supabase.from('v_product_stock').select('*').order('name');
+    // Prodotti & giacenze (vista)
+    const { data, error } = await supabase
+      .from('v_product_stock')
+      .select('*')
+      .order('name');
+
     if (error) setErr(error.message);
     setRows((data ?? []) as any);
+
+    // Conteggio alert sottoscorta aperti
+    const lowRes = await supabase
+      .from('low_stock_alerts')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'open');
+
+    setLowCount(lowRes.count ?? 0);
+
     setLoading(false);
   }
 
@@ -66,6 +88,9 @@ export default function ProductsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">Prodotti & giacenze</h1>
         <div className="flex items-center gap-2">
+          <a href="/low-stock" className="rounded-2xl px-3 py-2 border hover:shadow">
+            🔔 Sottoscorta{lowCount > 0 && <span className="ml-1 font-semibold">({lowCount})</span>}
+          </a>
           <label className="text-sm flex items-center gap-2">
             <input
               type="checkbox"
