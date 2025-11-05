@@ -15,7 +15,6 @@ type Row = {
   cost_eur: number;
   active: boolean;
 };
-
 type Role = 'admin' | 'desk';
 
 const fmtEur = (v:number)=> v.toLocaleString('it-IT',{ style:'currency', currency:'EUR' });
@@ -25,39 +24,56 @@ export default function ProductsPage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [role, setRole] = useState<Role>('desk');
   const [loading, setLoading] = useState(true);
+  const [showInactive, setShowInactive] = useState(false);
+  const [err, setErr] = useState<string|null>(null);
 
-  useEffect(() => {
-    (async () => {
-      // auth
-      const { data: au } = await supabase.auth.getUser();
-      if (!au?.user) { router.replace('/login'); return; }
+  async function load() {
+    setLoading(true); setErr(null);
+    const { data: au } = await supabase.auth.getUser();
+    if (!au?.user) { router.replace('/login'); return; }
 
-      // ruolo
-      const { data: r } = await supabase
-        .from('staff')
-        .select('role')
-        .eq('user_id', au.user.id)
-        .maybeSingle();
-      if (r?.role === 'admin') setRole('admin');
+    const { data: r } = await supabase.from('staff').select('role').eq('user_id', au.user.id).maybeSingle();
+    if (r?.role === 'admin') setRole('admin');
 
-      // dati lista (vista con giacenze)
-      const { data, error } = await supabase
-        .from('v_product_stock')
-        .select('*')
-        .order('name');
-      if (!error && data) setRows(data as any);
+    const { data, error } = await supabase.from('v_product_stock').select('*').order('name');
+    if (error) setErr(error.message);
+    setRows((data ?? []) as any);
+    setLoading(false);
+  }
 
-      setLoading(false);
-    })();
-  }, [router]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [router]);
+
+  const visible = rows.filter(r => showInactive ? true : r.active);
+
+  const deactivate = async (id:number) => {
+    setErr(null);
+    const { error } = await supabase.from('products').update({ active: false }).eq('id', id);
+    if (error) { setErr(error.message); return; }
+    await load();
+  };
+
+  const reactivate = async (id:number) => {
+    setErr(null);
+    const { error } = await supabase.from('products').update({ active: true }).eq('id', id);
+    if (error) { setErr(error.message); return; }
+    await load();
+  };
 
   if (loading) return <main className="p-6">Caricamento…</main>;
 
   return (
     <main className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">Prodotti & giacenze</h1>
-        <div className="space-x-2">
+        <div className="flex items-center gap-2">
+          <label className="text-sm flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={showInactive}
+              onChange={e=>setShowInactive(e.target.checked)}
+            />
+            Mostra disattivi
+          </label>
           {role === 'admin' && (
             <a href="/products/new" className="rounded-2xl px-3 py-2 border hover:shadow">
               ➕ Nuovo prodotto
@@ -67,8 +83,10 @@ export default function ProductsPage() {
         </div>
       </div>
 
+      {err && <p className="text-red-600 text-sm">{err}</p>}
+
       <div className="overflow-x-auto">
-        <table className="min-w-[720px] w-full border">
+        <table className="min-w-[780px] w-full border">
           <thead className="bg-gray-50">
             <tr>
               <th className="text-left p-2 border">Prodotto</th>
@@ -80,12 +98,13 @@ export default function ProductsPage() {
             </tr>
           </thead>
           <tbody>
-            {rows.map(r => {
+            {visible.map(r => {
               const low = Number(r.stock_qty) <= r.reorder_level;
               return (
                 <tr key={r.id} className="border-b">
                   <td className="p-2 border">
-                    {r.name} {!r.active && <span className="text-xs ml-1 text-gray-500">(disattivo)</span>}
+                    {r.name}{' '}
+                    {!r.active && <span className="text-xs ml-1 text-gray-500">(disattivo)</span>}
                   </td>
                   <td className="p-2 border">{r.sku ?? '—'}</td>
                   <td className="p-2 border text-right">
@@ -94,11 +113,34 @@ export default function ProductsPage() {
                   <td className="p-2 border text-right">{r.reorder_level}</td>
                   <td className="p-2 border text-right">{fmtEur(r.price_eur)}</td>
                   <td className="p-2 border text-center">
-                    <a className="underline" href={`/movements/new?product=${r.id}`}>Movimento</a>
+                    <div className="flex items-center justify-center gap-3">
+                      <a className="underline" href={`/movements/new?product=${r.id}`}>Movimento</a>
+                      {role === 'admin' && (r.active ? (
+                        <button
+                          className="text-red-600 underline"
+                          onClick={()=>deactivate(r.id)}
+                          title="Nascondi dalla lista (senza perdere i dati)"
+                        >
+                          Disattiva
+                        </button>
+                      ) : (
+                        <button
+                          className="text-green-700 underline"
+                          onClick={()=>reactivate(r.id)}
+                        >
+                          Riattiva
+                        </button>
+                      ))}
+                    </div>
                   </td>
                 </tr>
               );
             })}
+            {visible.length === 0 && (
+              <tr><td className="p-3 text-center text-sm text-gray-600" colSpan={6}>
+                Nessun prodotto da mostrare.
+              </td></tr>
+            )}
           </tbody>
         </table>
       </div>
