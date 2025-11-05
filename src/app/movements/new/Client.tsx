@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { useSearchParams, useRouter } from 'next/navigation';
 import type { ProductLite, StaffRole } from '@/lib/types';
 
-export default function NewMovement() {
+export default function NewMovementClient() {
   const router = useRouter();
   const sp = useSearchParams();
   const presetId = sp.get('product');
@@ -26,26 +26,22 @@ export default function NewMovement() {
   );
 
   useEffect(() => { (async () => {
-      const { data: au } = await supabase.auth.getUser();
-      const user = au?.user;
-      if (!user) { router.replace('/login'); return; }
-      const { data: r } = await supabase.from('staff').select('role').eq('user_id', user.id).maybeSingle();
-      if (r?.role === 'admin') setRole('admin');
+    const { data: au } = await supabase.auth.getUser();
+    const user = au?.user;
+    if (!user) { router.replace('/login'); return; }
+    const { data: r } = await supabase.from('staff').select('role').eq('user_id', user.id).maybeSingle();
+    if (r?.role === 'admin') setRole('admin');
 
-      const { data: prods } = await supabase.from('products').select('id,name').order('name');
-      setProducts((prods ?? []) as any);
-    })();
-  }, [router]);
+    const { data: prods } = await supabase.from('products').select('id,name').order('name');
+    setProducts((prods ?? []) as any);
+  })(); }, [router]);
 
   const submit = async () => {
     setErr(null);
     if (!productId || !qty) { setErr('Seleziona prodotto e quantità'); return; }
-
-    // Se desk: forza OUT e qty negativa
     const finalReason = isDesk ? 'OUT' : reason;
     const finalQty = finalReason === 'OUT' ? -Math.abs(qty) : Math.abs(qty);
 
-    // Validazioni UX coerenti con RLS
     if (isDesk && finalReason !== 'OUT') { setErr('Come desk puoi registrare solo vendite'); return; }
     if (isDesk && finalQty >= 0) { setErr('Come desk la quantità deve essere negativa (uscite)'); return; }
 
