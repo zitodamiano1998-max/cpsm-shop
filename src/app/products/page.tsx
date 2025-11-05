@@ -1,0 +1,85 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabaseClient';
+import type { StockView, StaffRole } from '@/lib/types';
+import { useRouter } from 'next/navigation';
+
+const fmtEur = (c:number)=> (c/100).toLocaleString('it-IT',{style:'currency',currency:'EUR'});
+
+export default function ProductsPage() {
+  const router = useRouter();
+  const [rows, setRows] = useState<StockView[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [role, setRole] = useState<StaffRole>('desk');
+
+  useEffect(() => {
+    (async () => {
+      // auth check
+      const { data: au } = await supabase.auth.getUser();
+      const user = au?.user;
+      if (!user) { router.replace('/login'); return; }
+
+      // role
+      const { data: r } = await supabase.from('staff').select('role').eq('user_id', user.id).maybeSingle();
+      if (r?.role === 'admin') setRole('admin');
+
+      // data
+      const { data, error } = await supabase.from('v_product_stock').select('*').order('name');
+      if (!error && data) setRows(data as any);
+      setLoading(false);
+    })();
+  }, [router]);
+
+  if (loading) return <main className="p-6">Caricamento…</main>;
+
+  return (
+    <main className="p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">Prodotti & Giacenze</h1>
+        <div className="space-x-2">
+          {role === 'admin' && (
+            <a href="/products/new" className="rounded-2xl px-3 py-2 border hover:shadow">
+              ➕ Nuovo prodotto
+            </a>
+          )}
+          <a href="/dashboard" className="rounded-2xl px-3 py-2 border hover:shadow">← Dashboard</a>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="min-w-[700px] w-full border">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="text-left p-2 border">Prodotto</th>
+              <th className="text-left p-2 border">SKU</th>
+              <th className="text-right p-2 border">Giacenza</th>
+              <th className="text-right p-2 border">Soglia</th>
+              <th className="text-right p-2 border">Prezzo</th>
+              <th className="p-2 border">Azioni</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => {
+              const low = Number(r.stock_qty) <= r.reorder_level;
+              return (
+                <tr key={r.id} className="border-b">
+                  <td className="p-2 border">
+                    {r.name} {!r.active && <span className="text-xs ml-1 text-gray-500">(disattivo)</span>}
+                  </td>
+                  <td className="p-2 border">{r.sku ?? '—'}</td>
+                  <td className="p-2 border text-right">{Number(r.stock_qty)} {low && <span className="ml-2">🔔</span>}</td>
+                  <td className="p-2 border text-right">{r.reorder_level}</td>
+                  <td className="p-2 border text-right">{fmtEur(r.price_cents)}</td>
+                  <td className="p-2 border text-center">
+                    <a className="underline" href={`/movements/new?product=${r.id}`}>Movimento</a>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </main>
+  );
+}
