@@ -2,83 +2,80 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import type { StockView, StaffRole } from '@/lib/types';
 import { useRouter } from 'next/navigation';
 
-const fmtEur = (c:number)=> (c/100).toLocaleString('it-IT',{style:'currency',currency:'EUR'});
-
-export default function ProductsPage() {
+export default function NewProductPage() {
   const router = useRouter();
-  const [rows, setRows] = useState<StockView[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [role, setRole] = useState<StaffRole>('desk');
+  const [role, setRole] = useState<'admin'|'desk'>('desk');
 
-  useEffect(() => {
-    (async () => {
-      // auth check
-      const { data: au } = await supabase.auth.getUser();
-      const user = au?.user;
-      if (!user) { router.replace('/login'); return; }
+  const [name, setName] = useState('');
+  const [sku, setSku] = useState('');
+  const [categoryId, setCategoryId] = useState<number | null>(null);
+  const [price, setPrice] = useState(0);
+  const [cost, setCost] = useState(0);
+  const [reorder, setReorder] = useState(0);
+  const [cats, setCats] = useState<{id:number; name:string}[]>([]);
+  const [err, setErr] = useState<string|null>(null);
 
-      // role
-      const { data: r } = await supabase.from('staff').select('role').eq('user_id', user.id).maybeSingle();
-      if (r?.role === 'admin') setRole('admin');
+  useEffect(()=>{(async()=>{
+    const { data: au } = await supabase.auth.getUser();
+    const user = au?.user;
+    if (!user) { router.replace('/login'); return; }
+    const { data: r } = await supabase.from('staff').select('role').eq('user_id', user.id).maybeSingle();
+    if (r?.role !== 'admin') { router.replace('/products'); return; }
+    setRole('admin');
+    const { data: c } = await supabase.from('categories').select('id,name').order('name');
+    setCats((c ?? []) as any);
+  })();},[router]);
 
-      // data
-      const { data, error } = await supabase.from('v_product_stock').select('*').order('name');
-      if (!error && data) setRows(data as any);
-      setLoading(false);
-    })();
-  }, [router]);
+  const submit = async () => {
+    setErr(null);
+    if (!name || !categoryId) { setErr('Nome e categoria sono obbligatori'); return; }
+    const { error } = await supabase.from('products').insert({
+      name, sku: sku || null, category_id: categoryId,
+      price_eur: price, cost_eur: cost, reorder_level: reorder, active: true
+    });
+    if (error) { setErr(error.message); return; }
+    router.push('/products');
+  };
 
-  if (loading) return <main className="p-6">Caricamento…</main>;
+  if (role !== 'admin') return null;
 
   return (
     <main className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Prodotti & Giacenze</h1>
-        <div className="space-x-2">
-          {role === 'admin' && (
-            <a href="/products/new" className="rounded-2xl px-3 py-2 border hover:shadow">
-              ➕ Nuovo prodotto
-            </a>
-          )}
-          <a href="/dashboard" className="rounded-2xl px-3 py-2 border hover:shadow">← Dashboard</a>
-        </div>
-      </div>
+      <h1 className="text-2xl font-semibold">Nuovo prodotto</h1>
+      <div className="grid gap-3 max-w-lg">
+        <label className="block">Nome
+          <input className="w-full border rounded px-3 py-2" value={name} onChange={e=>setName(e.target.value)} />
+        </label>
+        <label className="block">SKU
+          <input className="w-full border rounded px-3 py-2" value={sku} onChange={e=>setSku(e.target.value)} />
+        </label>
+        <label className="block">Categoria
+          <select className="w-full border rounded px-3 py-2"
+                  value={categoryId ?? ''} onChange={e=>setCategoryId(Number(e.target.value))}>
+            <option value="" disabled>Seleziona</option>
+            {cats.map(c=> <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </label>
+        <label className="block">Prezzo unitario (€)
+          <input type="number" step="0.01" className="w-full border rounded px-3 py-2"
+                 value={price} onChange={e=>setPrice(Number(e.target.value))}/>
+        </label>
+        <label className="block">Costo unitario (€)
+          <input type="number" step="0.01" className="w-full border rounded px-3 py-2"
+                 value={cost} onChange={e=>setCost(Number(e.target.value))}/>
+        </label>
+        <label className="block">Soglia sottoscorta
+          <input type="number" className="w-full border rounded px-3 py-2"
+                 value={reorder} onChange={e=>setReorder(Number(e.target.value))}/>
+        </label>
 
-      <div className="overflow-x-auto">
-        <table className="min-w-[700px] w-full border">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="text-left p-2 border">Prodotto</th>
-              <th className="text-left p-2 border">SKU</th>
-              <th className="text-right p-2 border">Giacenza</th>
-              <th className="text-right p-2 border">Soglia</th>
-              <th className="text-right p-2 border">Prezzo</th>
-              <th className="p-2 border">Azioni</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(r => {
-              const low = Number(r.stock_qty) <= r.reorder_level;
-              return (
-                <tr key={r.id} className="border-b">
-                  <td className="p-2 border">
-                    {r.name} {!r.active && <span className="text-xs ml-1 text-gray-500">(disattivo)</span>}
-                  </td>
-                  <td className="p-2 border">{r.sku ?? '—'}</td>
-                  <td className="p-2 border text-right">{Number(r.stock_qty)} {low && <span className="ml-2">🔔</span>}</td>
-                  <td className="p-2 border text-right">{r.reorder_level}</td>
-                  <td className="p-2 border text-right">{fmtEur(r.price_cents)}</td>
-                  <td className="p-2 border text-center">
-                    <a className="underline" href={`/movements/new?product=${r.id}`}>Movimento</a>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        {err && <p className="text-red-600 text-sm">{err}</p>}
+        <div className="flex gap-2">
+          <button onClick={submit} className="rounded-2xl px-4 py-2 bg-black text-white">Salva</button>
+          <a className="rounded-2xl px-4 py-2 border" href="/products">Annulla</a>
+        </div>
       </div>
     </main>
   );

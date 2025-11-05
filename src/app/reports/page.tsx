@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
 
-type Sales = { day: string; revenue_cents: number; lines: number };
-type Purch = { day: string; cost_cents: number; lines: number };
-const fmtEur = (c:number)=> (c/100).toLocaleString('it-IT',{style:'currency',currency:'EUR'});
+type Sales = { day: string; revenue_eur: number; lines: number };
+type Purch = { day: string; cost_eur: number; lines: number };
+const fmtEur = (v:number)=> v.toLocaleString('it-IT',{style:'currency',currency:'EUR'});
 
 export default function Reports() {
   const router = useRouter();
@@ -45,7 +45,7 @@ export default function Reports() {
               {sales.map(r=>(
                 <tr key={r.day} className="border-b">
                   <td className="p-2 border">{r.day}</td>
-                  <td className="p-2 border text-right">{fmtEur(r.revenue_cents)}</td>
+                  <td className="p-2 border text-right">{fmtEur(r.revenue_eur)}</td>
                   <td className="p-2 border text-right">{r.lines}</td>
                 </tr>
               ))}
@@ -67,7 +67,7 @@ export default function Reports() {
               {purch.map(r=>(
                 <tr key={r.day} className="border-b">
                   <td className="p-2 border">{r.day}</td>
-                  <td className="p-2 border text-right">{fmtEur(r.cost_cents)}</td>
+                  <td className="p-2 border text-right">{fmtEur(r.cost_eur)}</td>
                   <td className="p-2 border text-right">{r.lines}</td>
                 </tr>
               ))}

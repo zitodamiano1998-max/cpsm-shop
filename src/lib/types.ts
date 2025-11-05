@@ -5,8 +5,8 @@ export type StockView = {
   category_id: number | null;
   stock_qty: number;
   reorder_level: number;
-  price_cents: number;
-  cost_cents: number;
+  price_eur: number;
+  cost_eur: number;
   active: boolean;
 };
 
