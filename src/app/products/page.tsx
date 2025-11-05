@@ -52,13 +52,9 @@ export default function ProductsPage() {
     if (error) setErr(error.message);
     setRows((data ?? []) as any);
 
-    // Conteggio alert sottoscorta aperti
-    const lowRes = await supabase
-      .from('low_stock_alerts')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'open');
-
-    setLowCount(lowRes.count ?? 0);
+    // Conteggio alert NON VISTI dall'utente (RPC)
+    const unseenRes = await supabase.rpc('low_stock_unseen_count');
+    setLowCount((unseenRes.data as number) ?? 0);
 
     setLoading(false);
   }
@@ -88,8 +84,13 @@ export default function ProductsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">Prodotti & giacenze</h1>
         <div className="flex items-center gap-2">
-          <a href="/low-stock" className="rounded-2xl px-3 py-2 border hover:shadow">
-            🔔 Sottoscorta{lowCount > 0 && <span className="ml-1 font-semibold">({lowCount})</span>}
+          <a
+            href="/low-stock"
+            className={`rounded-2xl px-3 py-2 border hover:shadow flex items-center gap-2 ${lowCount>0 ? 'bg-yellow-100' : ''}`}
+            title="Visualizza alert sottoscorta"
+          >
+            <span>🔔 Sottoscorta</span>
+            {lowCount > 0 && <span className="ml-1 font-semibold">({lowCount})</span>}
           </a>
           <label className="text-sm flex items-center gap-2">
             <input
