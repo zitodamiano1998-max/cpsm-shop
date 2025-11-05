@@ -29,7 +29,7 @@ export default function ProductsPage() {
   const [lowCount, setLowCount] = useState(0);
 
   async function load() {
-    setLoading(true); setErr(null);
+    setErr(null);
 
     // Auth
     const { data: au } = await supabase.auth.getUser();
@@ -41,7 +41,7 @@ export default function ProductsPage() {
       .select('role')
       .eq('user_id', au.user.id)
       .maybeSingle();
-    if (r?.role === 'admin') setRole('admin');
+    if (r?.role === 'admin') setRole('admin'); else setRole('desk');
 
     // Prodotti & giacenze (vista)
     const { data, error } = await supabase
@@ -59,7 +59,39 @@ export default function ProductsPage() {
     setLoading(false);
   }
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [router]);
+  useEffect(() => {
+    setLoading(true);
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router]);
+
+  // Realtime: aggiorna lista su movimenti/prodotti/alert
+  useEffect(() => {
+    const channel = supabase.channel('realtime-products');
+
+    channel.on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'stock_movements' },
+      () => load()
+    );
+
+    channel.on(
+      'postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'products' },
+      () => load()
+    );
+
+    // Se hai pubblicato low_stock_alerts su supabase_realtime, abilita anche questo:
+    channel.on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'low_stock_alerts' },
+      () => load()
+    );
+
+    channel.subscribe();
+    return () => { supabase.removeChannel(channel); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const visible = rows.filter(r => showInactive ? true : r.active);
 
@@ -67,6 +99,7 @@ export default function ProductsPage() {
     setErr(null);
     const { error } = await supabase.from('products').update({ active: false }).eq('id', id);
     if (error) { setErr(error.message); return; }
+    // load() verrà chiamato anche dal realtime UPDATE, ma richiamiamo per sicurezza
     await load();
   };
 
